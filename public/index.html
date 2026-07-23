@@ -21,6 +21,9 @@
       margin: 0;
       padding: 0;
       overflow: hidden;
+      /* Fill entire screen in standalone PWA mode */
+      min-height: 100vh;
+      min-height: -webkit-fill-available;
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -30,6 +33,9 @@
     #root {
       display: flex;
       flex-direction: column;
+      min-height: 100vh;
+      min-height: -webkit-fill-available;
+      padding-bottom: env(safe-area-inset-bottom);
     }
   </style>
 </head>

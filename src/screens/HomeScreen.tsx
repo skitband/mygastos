@@ -243,7 +243,7 @@ export function HomeScreen() {
       )}
 
       {/* Bottom Tab Bar */}
-      <View style={[styles.tabBar, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom }]}>
+      <View style={[styles.tabBar, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 16 : 0) }]}>
         {([
           { id: 'home' as TabId, label: 'Home', icon: 'calendar-month' },
           { id: 'bills' as TabId, label: 'Bills', icon: 'flash' },
