@@ -71,7 +71,7 @@ export function SettingsScreen() {
 
       {/* Reset */}
       <TouchableOpacity style={styles.resetBtn} onPress={refreshData}>
-        <Text style={styles.resetText}>Reset demo data</Text>
+        <Text style={styles.resetText}>Reset data</Text>
       </TouchableOpacity>
 
       <View style={{ height: 100 }} />

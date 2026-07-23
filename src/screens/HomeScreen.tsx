@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, RefreshControl, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors as staticColors } from '../theme';
 import { useExpenses } from '../context/ExpenseContext';
 import { useCurrency } from '../context/CurrencyContext';
@@ -38,6 +38,7 @@ export function HomeScreen() {
 
   const { formatAmount } = useCurrency();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [activeTab, setActiveTab] = useState<TabId>('home');
   const [refreshing, setRefreshing] = useState(false);
@@ -221,7 +222,7 @@ export function HomeScreen() {
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Screen Content */}
       {activeTab === 'home' && renderHomeTab()}
       {activeTab === 'bills' && <BillsScreen />}
@@ -242,7 +243,7 @@ export function HomeScreen() {
       )}
 
       {/* Bottom Tab Bar */}
-      <View style={[styles.tabBar, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+      <View style={[styles.tabBar, { backgroundColor: colors.background, borderTopColor: colors.border, paddingBottom: insets.bottom }]}>
         {([
           { id: 'home' as TabId, label: 'Home', icon: 'calendar-month' },
           { id: 'bills' as TabId, label: 'Bills', icon: 'flash' },
@@ -405,7 +406,6 @@ const styles = StyleSheet.create({
     zIndex: 8,
   },
   tabBar: {
-    height: 84,
     borderTopWidth: 1,
     flexDirection: 'row',
     alignItems: 'flex-start',
