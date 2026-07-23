@@ -44,6 +44,7 @@ function seedDatabase(db) {
       ['groceries', 'Groceries', 'cart', '#056DFF'],
       ['transport', 'Transport', 'car', '#056DFF'],
       ['fun', 'Fun', 'gamepad-variant', '#056DFF'],
+      ['shopping', 'Shopping', 'shopping', '#056DFF'],
       ['bills', 'Bills', 'flash', '#056DFF'],
       ['health', 'Health', 'heart-pulse', '#056DFF'],
     ];

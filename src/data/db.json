@@ -4,6 +4,7 @@
     { "id": "groceries", "name": "Groceries", "icon": "cart", "color": "#056DFF" },
     { "id": "transport", "name": "Transport", "icon": "car", "color": "#056DFF" },
     { "id": "fun", "name": "Fun", "icon": "gamepad-variant", "color": "#056DFF" },
+    { "id": "shopping", "name": "Shopping", "icon": "shopping", "color": "#056DFF" },
     { "id": "bills", "name": "Bills", "icon": "flash", "color": "#056DFF" },
     { "id": "health", "name": "Health", "icon": "heart-pulse", "color": "#056DFF" }
   ],

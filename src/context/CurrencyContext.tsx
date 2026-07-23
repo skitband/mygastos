@@ -42,7 +42,7 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const formatAmount = useCallback((amount: number) => {
-    return `${currency.symbol}${amount.toFixed(2)}`;
+    return `${currency.symbol}${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }, [currency]);
 
   return (

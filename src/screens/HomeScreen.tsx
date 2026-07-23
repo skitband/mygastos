@@ -11,13 +11,17 @@ import { Calendar } from '../components/Calendar';
 import { CategoryFilter } from '../components/CategoryFilter';
 import { ExpenseList } from '../components/ExpenseList';
 import { AddExpenseModal } from '../components/AddExpenseModal';
-import { SettingsDrawer } from '../components/SettingsDrawer';
+import { ExpenseDetailSheet } from '../components/ExpenseDetailSheet';
 import { HomeSkeleton } from '../components/Skeleton';
+import { BillsScreen } from './BillsScreen';
+import { SettingsScreen } from './SettingsScreen';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
+
+type TabId = 'home' | 'bills' | 'settings';
 
 export function HomeScreen() {
   const {
@@ -34,8 +38,8 @@ export function HomeScreen() {
 
   const { formatAmount } = useCurrency();
   const { colors } = useTheme();
-  const [drawerVisible, setDrawerVisible] = useState(false);
 
+  const [activeTab, setActiveTab] = useState<TabId>('home');
   const [refreshing, setRefreshing] = useState(false);
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -50,6 +54,7 @@ export function HomeScreen() {
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [detailExpense, setDetailExpense] = useState<Expense | null>(null);
 
   const monthTotal = useMemo(
     () => getMonthTotal(currentYear, currentMonth, categoryFilter || undefined),
@@ -100,6 +105,7 @@ export function HomeScreen() {
     if (Platform.OS === 'web') {
       if (window.confirm('Are you sure you want to delete this expense?')) {
         deleteExpense(id);
+        setDetailExpense(null);
       }
     } else {
       Alert.alert(
@@ -107,7 +113,7 @@ export function HomeScreen() {
         'Are you sure you want to delete this expense?',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Delete', style: 'destructive', onPress: () => deleteExpense(id) },
+          { text: 'Delete', style: 'destructive', onPress: () => { deleteExpense(id); setDetailExpense(null); } },
         ]
       );
     }
@@ -130,9 +136,8 @@ export function HomeScreen() {
     setAddModalVisible(false);
   };
 
-  const handleEdit = (expense: Expense) => {
-    setEditingExpense(expense);
-    setAddModalVisible(true);
+  const handleExpenseTap = (expense: Expense) => {
+    setDetailExpense(expense);
   };
 
   if (loading) {
@@ -143,91 +148,125 @@ export function HomeScreen() {
     );
   }
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={[styles.appTitle, { color: colors.text }]}>My Gastos</Text>
-          <TouchableOpacity onPress={() => setDrawerVisible(true)} style={styles.menuBtn}>
-            <MaterialCommunityIcons name="menu" size={24} color={colors.text} />
+  const renderHomeTab = () => (
+    <ScrollView
+      style={styles.scrollView}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={[styles.appTitle, { color: colors.text }]}>My Gastos</Text>
+      </View>
+
+      {/* Blue Card: Month Nav + Total */}
+      <View style={styles.blueCard}>
+        <View style={styles.monthNav}>
+          <TouchableOpacity onPress={goToPrevMonth} style={styles.monthArrow}>
+            <MaterialCommunityIcons name="chevron-left" size={22} color={colors.white} />
+          </TouchableOpacity>
+          <Text style={styles.monthTitle}>{MONTHS[currentMonth]} {currentYear}</Text>
+          <TouchableOpacity onPress={goToNextMonth} style={styles.monthArrow}>
+            <MaterialCommunityIcons name="chevron-right" size={22} color={colors.white} />
           </TouchableOpacity>
         </View>
+        <Text style={styles.totalLabel}>Total spent in {MONTHS[currentMonth]}</Text>
+        <Text style={styles.totalAmount}>{formatAmount(monthTotal)}</Text>
+      </View>
 
-        {/* Blue Card: Month Nav + Total */}
-        <View style={styles.blueCard}>
-          <View style={styles.monthNav}>
-            <TouchableOpacity onPress={goToPrevMonth} style={styles.monthArrow}>
-              <MaterialCommunityIcons name="chevron-left" size={22} color={colors.white} />
-            </TouchableOpacity>
-            <Text style={styles.monthTitle}>{MONTHS[currentMonth]} {currentYear}</Text>
-            <TouchableOpacity onPress={goToNextMonth} style={styles.monthArrow}>
-              <MaterialCommunityIcons name="chevron-right" size={22} color={colors.white} />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.totalLabel}>Total spent in {MONTHS[currentMonth]}</Text>
-          <Text style={styles.totalAmount}>{formatAmount(monthTotal)}</Text>
-        </View>
+      {/* Category Filter */}
+      <CategoryFilter
+        categories={categories}
+        selectedCategory={categoryFilter}
+        onSelect={setCategoryFilter}
+      />
 
-        {/* Category Filter */}
-        <CategoryFilter
-          categories={categories}
-          selectedCategory={categoryFilter}
-          onSelect={setCategoryFilter}
+      {/* Calendar */}
+      <View style={[styles.calendarContainer, { backgroundColor: colors.surfaceBg }]}>
+        <Calendar
+          year={currentYear}
+          month={currentMonth}
+          selectedDay={selectedDay}
+          daysWithExpenses={daysWithExpenses}
+          onSelectDay={setSelectedDay}
         />
+      </View>
 
-        {/* Calendar */}
-        <View style={[styles.calendarContainer, { backgroundColor: colors.surfaceBg }]}>
-          <Calendar
-            year={currentYear}
-            month={currentMonth}
-            selectedDay={selectedDay}
-            daysWithExpenses={daysWithExpenses}
-            onSelectDay={setSelectedDay}
+      {/* Day expenses */}
+      {selectedDay && (
+        <View style={styles.daySection}>
+          <View style={styles.daySectionHeader}>
+            <Text style={[styles.dayTitle, { color: colors.text }]}>
+              {new Date(currentYear, currentMonth, selectedDay).toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+              })}
+            </Text>
+            {dayTotal > 0 && (
+              <Text style={[styles.dayTotal, { color: colors.primary }]}>{formatAmount(dayTotal)}</Text>
+            )}
+          </View>
+          <ExpenseList
+            expenses={dayExpenses}
+            categories={categories}
+            onDelete={handleDelete}
+            onEdit={handleExpenseTap}
           />
         </View>
+      )}
+    </ScrollView>
+  );
 
-        {/* Day expenses */}
-        {selectedDay && (
-          <View style={styles.daySection}>
-            <View style={styles.daySectionHeader}>
-              <Text style={[styles.dayTitle, { color: colors.text }]}>
-                {new Date(currentYear, currentMonth, selectedDay).toLocaleDateString('en-US', {
-                  weekday: 'long',
-                  month: 'long',
-                  day: 'numeric',
-                })}
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Screen Content */}
+      {activeTab === 'home' && renderHomeTab()}
+      {activeTab === 'bills' && <BillsScreen />}
+      {activeTab === 'settings' && <SettingsScreen />}
+
+      {/* FAB - only on home tab */}
+      {activeTab === 'home' && (
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => {
+            if (!selectedDay) setSelectedDay(today.getDate());
+            setEditingExpense(null);
+            setAddModalVisible(true);
+          }}
+        >
+          <MaterialCommunityIcons name="plus" size={28} color={colors.white} />
+        </TouchableOpacity>
+      )}
+
+      {/* Bottom Tab Bar */}
+      <View style={[styles.tabBar, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
+        {([
+          { id: 'home' as TabId, label: 'Home', icon: 'calendar-month' },
+          { id: 'bills' as TabId, label: 'Bills', icon: 'flash' },
+          { id: 'settings' as TabId, label: 'Settings', icon: 'cog' },
+        ]).map(tab => {
+          const active = activeTab === tab.id;
+          return (
+            <TouchableOpacity
+              key={tab.id}
+              style={styles.tabItem}
+              onPress={() => setActiveTab(tab.id)}
+            >
+              <MaterialCommunityIcons
+                name={tab.icon as any}
+                size={23}
+                color={active ? colors.primary : colors.muted}
+              />
+              <Text style={[styles.tabLabel, { color: active ? colors.primary : colors.muted }]}>
+                {tab.label}
               </Text>
-              {dayTotal > 0 && (
-                <Text style={[styles.dayTotal, { color: colors.primary }]}>{formatAmount(dayTotal)}</Text>
-              )}
-            </View>
-            <ExpenseList
-              expenses={dayExpenses}
-              categories={categories}
-              onDelete={handleDelete}
-              onEdit={handleEdit}
-            />
-          </View>
-        )}
-      </ScrollView>
-
-      {/* FAB */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => {
-          if (!selectedDay) setSelectedDay(today.getDate());
-          setAddModalVisible(true);
-        }}
-      >
-        <MaterialCommunityIcons name="plus" size={28} color={colors.white} />
-      </TouchableOpacity>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
 
       {/* Add Modal */}
       <AddExpenseModal
@@ -242,10 +281,12 @@ export function HomeScreen() {
         editingExpense={editingExpense}
       />
 
-      {/* Settings Drawer */}
-      <SettingsDrawer
-        visible={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
+      {/* Detail Sheet */}
+      <ExpenseDetailSheet
+        expense={detailExpense}
+        categories={categories}
+        onClose={() => setDetailExpense(null)}
+        onDelete={handleDelete}
       />
     </SafeAreaView>
   );
@@ -267,9 +308,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  menuBtn: {
-    padding: 6,
-  },
   appTitle: {
     fontSize: 28,
     fontFamily: 'Manrope_800ExtraBold',
@@ -278,19 +316,24 @@ const styles = StyleSheet.create({
   blueCard: {
     marginHorizontal: 22,
     backgroundColor: staticColors.primary,
-    borderRadius: 20,
+    borderRadius: 26,
     paddingVertical: 20,
-    paddingHorizontal: 20,
-    marginBottom: 16,
+    paddingHorizontal: 22,
+    marginBottom: 18,
+    shadowColor: '#056DFF',
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.35,
+    shadowRadius: 34,
+    elevation: 8,
   },
   totalLabel: {
     fontSize: 14,
     fontFamily: 'Manrope_500Medium',
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(255,255,255,0.85)',
     marginTop: 16,
   },
   totalAmount: {
-    fontSize: 40,
+    fontSize: 42,
     fontFamily: 'Manrope_700Bold',
     color: staticColors.white,
     letterSpacing: -1.5,
@@ -306,58 +349,77 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.16)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   monthTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: 'Manrope_700Bold',
     color: staticColors.white,
+    minWidth: 130,
+    textAlign: 'center',
   },
   calendarContainer: {
     marginHorizontal: 22,
-    borderRadius: 20,
-    paddingHorizontal: 12,
+    borderRadius: 24,
+    paddingHorizontal: 14,
     paddingTop: 16,
-    paddingBottom: 16,
-    marginBottom: 16,
+    paddingBottom: 18,
+    marginBottom: 22,
   },
   daySection: {
-    borderTopWidth: 1,
-    borderTopColor: staticColors.border,
-    paddingTop: 16,
-    paddingBottom: 100,
+    paddingTop: 0,
+    paddingBottom: 120,
   },
   daySectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 22,
-    marginBottom: 8,
+    marginBottom: 12,
   },
   dayTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: 'Manrope_700Bold',
   },
   dayTotal: {
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: 'Manrope_700Bold',
   },
   fab: {
     position: 'absolute',
-    bottom: 30,
+    bottom: 104,
     right: 24,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     backgroundColor: staticColors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 8,
-    shadowColor: staticColors.primary,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
+    shadowColor: '#056DFF',
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.45,
+    shadowRadius: 26,
+    zIndex: 8,
+  },
+  tabBar: {
+    height: 84,
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-around',
+    paddingTop: 12,
+    paddingHorizontal: 16,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  tabLabel: {
+    fontSize: 11,
+    fontFamily: 'Manrope_600SemiBold',
   },
 });
