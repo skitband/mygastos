@@ -162,3 +162,46 @@ export async function fetchBreakdown(month: number, year: number): Promise<Break
   if (!res.ok) throw new Error('Failed to fetch breakdown');
   return res.json();
 }
+
+// ==================== METER READINGS ====================
+
+export interface MeterData {
+  prev: string;
+  curr: string;
+  rate: string;
+}
+
+export interface MetersResponse {
+  elec: MeterData;
+  water: MeterData;
+}
+
+export async function fetchMeters(year: number, month: number): Promise<MetersResponse> {
+  const query = new URLSearchParams({
+    year: String(year),
+    month: String(month),
+  });
+  const res = await fetchWithTimeout(`${BASE_URL}/api/meters?${query.toString()}`);
+  if (!res.ok) throw new Error('Failed to fetch meters');
+  return res.json();
+}
+
+export async function saveMeterReading(
+  utility: 'elec' | 'water',
+  year: number,
+  month: number,
+  data: MeterData
+): Promise<void> {
+  const res = await fetchWithTimeout(`${BASE_URL}/api/meters/${utility}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      year,
+      month,
+      prev: data.prev,
+      curr: data.curr,
+      rate: data.rate,
+    }),
+  });
+  if (!res.ok) throw new Error('Failed to save meter reading');
+}

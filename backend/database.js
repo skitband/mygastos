@@ -26,6 +26,19 @@ function initializeDatabase() {
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (category_id) REFERENCES categories(id)
     );
+
+    CREATE TABLE IF NOT EXISTS meter_readings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      utility TEXT NOT NULL CHECK(utility IN ('elec', 'water')),
+      year INTEGER NOT NULL,
+      month INTEGER NOT NULL,
+      prev_reading REAL NOT NULL DEFAULT 0,
+      curr_reading REAL NOT NULL DEFAULT 0,
+      rate REAL NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(utility, year, month)
+    );
   `);
 
   return db;

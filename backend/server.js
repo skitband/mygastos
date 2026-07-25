@@ -249,6 +249,78 @@ app.post('/api/reset', (req, res) => {
   res.json({ message: 'All expenses deleted' });
 });
 
+// ==================== METER READINGS ====================
+
+// GET meter readings for a month
+app.get('/api/meters', (req, res) => {
+  const { year, month } = req.query;
+
+  if (!year || !month) {
+    return res.status(400).json({ error: 'year and month query params are required' });
+  }
+
+  const readings = db.prepare(
+    'SELECT * FROM meter_readings WHERE year = ? AND month = ?'
+  ).all(Number(year), Number(month));
+
+  const result = {
+    elec: { prev: '0', curr: '0', rate: '16.00' },
+    water: { prev: '0', curr: '0', rate: '59.00' },
+  };
+
+  for (const r of readings) {
+    result[r.utility] = {
+      prev: String(r.prev_reading),
+      curr: String(r.curr_reading),
+      rate: String(r.rate),
+    };
+  }
+
+  res.json(result);
+});
+
+// PUT upsert a meter reading for a specific utility/month
+app.put('/api/meters/:utility', (req, res) => {
+  const { utility } = req.params;
+  const { year, month, prev, curr, rate } = req.body;
+
+  if (!['elec', 'water'].includes(utility)) {
+    return res.status(400).json({ error: 'utility must be elec or water' });
+  }
+
+  if (year == null || month == null) {
+    return res.status(400).json({ error: 'year and month are required' });
+  }
+
+  const stmt = db.prepare(`
+    INSERT INTO meter_readings (utility, year, month, prev_reading, curr_reading, rate, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(utility, year, month)
+    DO UPDATE SET prev_reading = excluded.prev_reading,
+                  curr_reading = excluded.curr_reading,
+                  rate = excluded.rate,
+                  updated_at = datetime('now')
+  `);
+
+  stmt.run(
+    utility,
+    Number(year),
+    Number(month),
+    Number(prev) || 0,
+    Number(curr) || 0,
+    Number(rate) || 0
+  );
+
+  res.json({
+    utility,
+    year: Number(year),
+    month: Number(month),
+    prev: String(prev),
+    curr: String(curr),
+    rate: String(rate),
+  });
+});
+
 // ==================== START SERVER ====================
 
 const server = app.listen(PORT, '0.0.0.0', () => {

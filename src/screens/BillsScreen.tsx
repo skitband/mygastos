@@ -1,23 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { useCurrency } from '../context/CurrencyContext';
+import * as api from '../services/api';
 
 interface MeterData {
   prev: string;
   curr: string;
   rate: string;
-  history: MeterHistory[];
-}
-
-interface MeterHistory {
-  date: string;
-  prev: number;
-  curr: number;
-  cons: number;
-  rate: number;
-  amount: number;
 }
 
 interface Meters {
@@ -25,18 +17,16 @@ interface Meters {
   water: MeterData;
 }
 
-const INITIAL_METERS: Meters = {
+const DEFAULT_METERS: Meters = {
   elec: {
     prev: '0',
     curr: '0',
     rate: '16.00',
-    history: [],
   },
   water: {
     prev: '0',
     curr: '0',
     rate: '59.00',
-    history: [],
   },
 };
 
@@ -48,10 +38,77 @@ const MONTHS = [
 export function BillsScreen() {
   const { colors } = useTheme();
   const { formatAmount } = useCurrency();
-  const [meters, setMeters] = useState<Meters>(INITIAL_METERS);
 
   const now = new Date();
-  const monthShort = MONTHS[now.getMonth()].slice(0, 3);
+  const [currentYear, setCurrentYear] = useState(now.getFullYear());
+  const [currentMonth, setCurrentMonth] = useState(now.getMonth());
+  const [meters, setMeters] = useState<Meters>(DEFAULT_METERS);
+  const [savedMeters, setSavedMeters] = useState<Meters>(DEFAULT_METERS);
+  const [useApi, setUseApi] = useState(false);
+
+  const storageKey = `@gastos_meters_${currentYear}_${currentMonth}`;
+
+  // Load meter data for current month (API first, fallback to AsyncStorage)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await api.fetchMeters(currentYear, currentMonth);
+        if (!cancelled) {
+          setMeters(data);
+          setSavedMeters(data);
+          setUseApi(true);
+          await AsyncStorage.setItem(storageKey, JSON.stringify(data)).catch(() => {});
+        }
+      } catch {
+        // API not available, fall back to AsyncStorage
+        if (!cancelled) setUseApi(false);
+        try {
+          const stored = await AsyncStorage.getItem(storageKey);
+          if (!cancelled) {
+            const data = stored ? JSON.parse(stored) : DEFAULT_METERS;
+            setMeters(data);
+            setSavedMeters(data);
+          }
+        } catch {
+          if (!cancelled) {
+            setMeters(DEFAULT_METERS);
+            setSavedMeters(DEFAULT_METERS);
+          }
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [currentYear, currentMonth, storageKey]);
+
+  const saveReading = useCallback(async (util: keyof Meters) => {
+    const next = { ...savedMeters, [util]: meters[util] };
+    if (useApi) {
+      try {
+        await api.saveMeterReading(util, currentYear, currentMonth, meters[util]);
+      } catch {}
+    }
+    await AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch(() => {});
+    setSavedMeters(next);
+  }, [storageKey, meters, savedMeters, useApi, currentYear, currentMonth]);
+
+  const goToPrevMonth = () => {
+    if (currentMonth === 0) {
+      setCurrentMonth(11);
+      setCurrentYear(y => y - 1);
+    } else {
+      setCurrentMonth(m => m - 1);
+    }
+  };
+
+  const goToNextMonth = () => {
+    if (currentMonth === 11) {
+      setCurrentMonth(0);
+      setCurrentYear(y => y + 1);
+    } else {
+      setCurrentMonth(m => m + 1);
+    }
+  };
 
   const num = (v: string) => {
     const n = parseFloat(v);
@@ -65,34 +122,9 @@ export function BillsScreen() {
     }));
   };
 
-  const saveReading = (util: keyof Meters, unit: string) => {
-    setMeters(prev => {
-      const mv = prev[util];
-      const cons = Math.max(num(mv.curr) - num(mv.prev), 0);
-      if (cons <= 0) return prev;
-      const amount = cons * num(mv.rate);
-      const date = MONTHS[now.getMonth()] + ' ' + now.getFullYear();
-      const entry: MeterHistory = {
-        date,
-        prev: num(mv.prev),
-        curr: num(mv.curr),
-        cons,
-        rate: num(mv.rate),
-        amount,
-      };
-      return {
-        ...prev,
-        [util]: {
-          ...mv,
-          prev: mv.curr,
-          history: [entry, ...(mv.history || [])],
-        },
-      };
-    });
-  };
-
-  const total = meters.elec.history.reduce((s, h) => s + h.amount, 0)
-    + meters.water.history.reduce((s, h) => s + h.amount, 0);
+  const elecCons = Math.max(num(savedMeters.elec.curr) - num(savedMeters.elec.prev), 0);
+  const waterCons = Math.max(num(savedMeters.water.curr) - num(savedMeters.water.prev), 0);
+  const total = (elecCons * num(savedMeters.elec.rate)) + (waterCons * num(savedMeters.water.rate));
 
   const meterDefs = [
     { id: 'elec' as const, name: 'Electricity', unit: 'kWh', icon: 'flash' as const, color: '#FF6424' },
@@ -105,10 +137,19 @@ export function BillsScreen() {
         <Text style={[styles.title, { color: colors.text }]}>Sub-meter</Text>
       </View>
 
-      {/* Summary Card */}
+      {/* Month Nav + Total */}
       <View style={styles.summaryCard}>
+        <View style={styles.monthNav}>
+          <TouchableOpacity onPress={goToPrevMonth} style={styles.monthArrow}>
+            <MaterialCommunityIcons name="chevron-left" size={22} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.monthTitle}>{MONTHS[currentMonth]} {currentYear}</Text>
+          <TouchableOpacity onPress={goToNextMonth} style={styles.monthArrow}>
+            <MaterialCommunityIcons name="chevron-right" size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.totalLabel}>Electricity + Water</Text>
         <Text style={styles.summaryAmount}>{formatAmount(total)}</Text>
-        <Text style={styles.summarySubtext}>Electricity + Water for {monthShort}</Text>
       </View>
 
       {/* Meter Cards */}
@@ -183,31 +224,10 @@ export function BillsScreen() {
 
             <TouchableOpacity
               style={[styles.saveBtn, { backgroundColor: colors.surfaceBg }]}
-              onPress={() => saveReading(md.id, md.unit)}
+              onPress={() => saveReading(md.id)}
             >
               <Text style={[styles.saveBtnText, { color: colors.text }]}>Save reading</Text>
             </TouchableOpacity>
-
-            {/* History */}
-            {mv.history.length > 0 && (
-              <>
-                <Text style={[styles.historyHead, { color: colors.muted }]}>History</Text>
-                {mv.history.map((h, i) => (
-                  <View key={i} style={[styles.historyRow, i > 0 && { borderTopWidth: 1, borderTopColor: colors.border }]}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.historyDate, { color: colors.text }]}>{h.date}</Text>
-                      <Text style={[styles.historyMeta, { color: colors.muted }]}>
-                        {h.cons.toLocaleString('en-US', { maximumFractionDigits: 2 })} {md.unit}
-                      </Text>
-                      <Text style={[styles.historyMeta, { color: colors.muted }]}>
-                        Prev {h.prev} → {h.curr} · {formatAmount(h.rate)}/{md.unit}
-                      </Text>
-                    </View>
-                    <Text style={[styles.historyAmount, { color: colors.text }]}>{formatAmount(h.amount)}</Text>
-                  </View>
-                ))}
-              </>
-            )}
           </View>
         );
       })}
@@ -243,10 +263,32 @@ const styles = StyleSheet.create({
     shadowRadius: 34,
     elevation: 8,
   },
-  summaryLabel: {
+  monthNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  monthArrow: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthTitle: {
+    fontSize: 18,
+    fontFamily: 'Manrope_700Bold',
+    color: '#fff',
+    minWidth: 130,
+    textAlign: 'center',
+  },
+  totalLabel: {
     fontSize: 14,
     fontFamily: 'Manrope_500Medium',
     color: 'rgba(255,255,255,0.85)',
+    marginTop: 16,
   },
   summaryAmount: {
     fontSize: 38,
@@ -255,11 +297,7 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
     marginVertical: 4,
   },
-  summarySubtext: {
-    fontSize: 13,
-    fontFamily: 'Manrope_400Regular',
-    color: 'rgba(255,255,255,0.8)',
-  },
+
   meterCard: {
     borderRadius: 22,
     padding: 18,
@@ -338,39 +376,13 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     marginTop: 14,
-    height: 44,
-    borderRadius: 13,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   saveBtnText: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: 'Manrope_600SemiBold',
-  },
-  historyHead: {
-    fontSize: 11,
-    fontFamily: 'Manrope_700Bold',
-    letterSpacing: 0.8,
-    marginTop: 18,
-    marginBottom: 6,
-  },
-  historyRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingVertical: 11,
-  },
-  historyDate: {
-    fontSize: 13.5,
-    fontFamily: 'Manrope_600SemiBold',
-  },
-  historyMeta: {
-    fontSize: 12,
-    fontFamily: 'Manrope_400Regular',
-    marginTop: 2,
-  },
-  historyAmount: {
-    fontSize: 14,
-    fontFamily: 'Manrope_700Bold',
   },
 });
