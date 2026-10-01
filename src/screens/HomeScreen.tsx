@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, RefreshControl, Platform } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -56,6 +56,10 @@ export function HomeScreen() {
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [detailExpense, setDetailExpense] = useState<Expense | null>(null);
+
+  useEffect(() => {
+    if (categoryFilter && !categories.some(c => c.id === categoryFilter)) setCategoryFilter(null);
+  }, [categories, categoryFilter]);
 
   const monthTotal = useMemo(
     () => getMonthTotal(currentYear, currentMonth, categoryFilter || undefined),

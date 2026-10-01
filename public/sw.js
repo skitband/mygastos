@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gastos-v1';
+const CACHE_NAME = 'gastos-v2';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -44,7 +44,23 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first for everything else (app shell, JS, CSS, images)
+  // Network-first for pages so new deploys (new bundle hashes) are picked up
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put('/', clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match('/'))
+    );
+    return;
+  }
+
+  // Cache-first for static assets (hashed JS, CSS, images)
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached;

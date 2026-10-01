@@ -19,6 +19,10 @@ interface ExpenseContextType {
   getMonthTotal: (year: number, month: number, categoryFilter?: string) => number;
   getDaysWithExpenses: (year: number, month: number, categoryFilter?: string) => number[];
   refreshData: () => Promise<void>;
+  replaceData: (expenses: Expense[], categories?: Category[]) => Promise<void>;
+  addCategory: (category: Omit<Category, 'id'>) => void;
+  updateCategory: (id: string, updates: Partial<Omit<Category, 'id'>>) => void;
+  deleteCategory: (id: string) => void;
 }
 
 const ExpenseContext = createContext<ExpenseContextType | undefined>(undefined);
@@ -36,15 +40,31 @@ export function ExpenseProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, []);
 
+  const persistCategories = useCallback(async (cats: Category[]) => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY_CATEGORIES, JSON.stringify(cats));
+    } catch {}
+  }, []);
+
   // Try to load from API, fall back to local storage
   const loadFromApi = useCallback(async () => {
+    let storedCategories: Category[] | null = null;
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEY_CATEGORIES);
+      if (raw) {
+        storedCategories = JSON.parse(raw);
+        setCategories(storedCategories!);
+      }
+    } catch {}
+
     try {
       setLoading(true);
       const [cats, exps] = await Promise.all([
         api.fetchCategories(),
         api.fetchExpenses(),
       ]);
-      setCategories(cats);
+      // Locally edited categories take precedence over the server's list.
+      if (!storedCategories) setCategories(cats);
       const mapped = exps.map(e => ({
         id: String(e.id),
         amount: e.amount,
@@ -147,6 +167,40 @@ export function ExpenseProvider({ children }: { children: React.ReactNode }) {
     });
   }, [useApi, persistExpenses]);
 
+  const replaceData = useCallback(async (exps: Expense[], cats?: Category[]) => {
+    setExpenses(exps);
+    await persistExpenses(exps);
+    if (cats) {
+      setCategories(cats);
+      await persistCategories(cats);
+    }
+  }, [persistExpenses, persistCategories]);
+
+  const addCategory = useCallback((category: Omit<Category, 'id'>) => {
+    const newCategory: Category = { ...category, id: `custom-${Date.now()}` };
+    setCategories(prev => {
+      const updated = [...prev, newCategory];
+      persistCategories(updated);
+      return updated;
+    });
+  }, [persistCategories]);
+
+  const updateCategory = useCallback((id: string, updates: Partial<Omit<Category, 'id'>>) => {
+    setCategories(prev => {
+      const updated = prev.map(c => c.id === id ? { ...c, ...updates } : c);
+      persistCategories(updated);
+      return updated;
+    });
+  }, [persistCategories]);
+
+  const deleteCategory = useCallback((id: string) => {
+    setCategories(prev => {
+      const updated = prev.filter(c => c.id !== id);
+      persistCategories(updated);
+      return updated;
+    });
+  }, [persistCategories]);
+
   const getExpensesByDate = useCallback((date: string) => {
     return expenses.filter(e => e.date === date);
   }, [expenses]);
@@ -195,6 +249,10 @@ export function ExpenseProvider({ children }: { children: React.ReactNode }) {
       getMonthTotal,
       getDaysWithExpenses,
       refreshData: loadFromApi,
+      replaceData,
+      addCategory,
+      updateCategory,
+      deleteCategory,
     }}>
       {children}
     </ExpenseContext.Provider>

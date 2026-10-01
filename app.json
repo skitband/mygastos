@@ -21,6 +21,19 @@
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b8b3eeb4-5bb6-4eea-ad48-0883c804aa7f"
+      }
+    },
+    "owner": "skitband",
+    "runtimeVersion": "exposdk:57.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/b8b3eeb4-5bb6-4eea-ad48-0883c804aa7f"
+    },
+    "plugins": [
+      "expo-sharing"
+    ]
   }
 }
